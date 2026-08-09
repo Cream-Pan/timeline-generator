@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>進捗線表 Generator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">RESEARCH TOOL</p>
+        <h1>進捗線表 Generator</h1>
+        <p class="header-description">週単位のタスク期間を色ブロックで可視化し，CSV・PNG・SVGとして保存できます．</p>
+      </div>
+      <span class="privacy-badge">ローカル処理</span>
+    </header>
+
+    <div id="messageArea" class="message-area" role="status" aria-live="polite"></div>
+
+    <section class="panel compact-panel">
+      <h2 class="section-title">1．データ</h2>
+      <div class="data-grid">
+        <label class="file-picker" for="csvFileInput">
+          <span class="file-picker-title">CSVを読み込む</span>
+          <span class="file-help">このアプリで保存したCSVを読み込むと，線表をそのまま復元します．</span>
+          <input id="csvFileInput" type="file" accept=".csv,text/csv">
+          <span id="csvFileName" class="file-name">未選択</span>
+        </label>
+
+        <div class="data-actions">
+          <button id="newProjectButton" type="button" class="secondary-button">新規作成</button>
+          <button id="downloadCsvButton" type="button">CSV保存</button>
+          <button id="downloadSampleButton" type="button" class="secondary-button">サンプルCSV保存</button>
+        </div>
+      </div>
+      <p class="tiny-muted">入力内容は同じブラウザの localStorage に自動保存します．正式なバックアップにはCSV保存を利用してください．</p>
+    </section>
+
+    <section class="panel compact-panel">
+      <h2 class="section-title">2．表示設定</h2>
+      <div class="settings-grid">
+        <label class="field">
+          <span>線表タイトル</span>
+          <input id="titleInput" type="text" maxlength="80" value="◎線表">
+        </label>
+        <label class="field">
+          <span>表示開始週</span>
+          <select id="displayStartSelect"></select>
+        </label>
+        <label class="field">
+          <span>表示終了週</span>
+          <select id="displayEndSelect"></select>
+        </label>
+      </div>
+      <p class="tiny-muted">各週は日曜日始まりです．月をまたぐ週は，週の開始日が属する月に表示します．</p>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading-row">
+        <div>
+          <h2 class="section-title">3．タスク管理</h2>
+          <p class="description">開始週・終了週で連続範囲を一括指定できます．プレビュー上では，各週ブロックを個別にON/OFFできます．</p>
+        </div>
+        <button id="addTaskButton" type="button">＋ タスク追加</button>
+      </div>
+
+      <div class="table-container editor-table-container">
+        <table class="editor-table" aria-label="タスク編集表">
+          <thead>
+            <tr>
+              <th>大区分</th>
+              <th>タスク名</th>
+              <th>開始週</th>
+              <th>終了週</th>
+              <th>色</th>
+              <th>選択週</th>
+              <th>順序</th>
+              <th>削除</th>
+            </tr>
+          </thead>
+          <tbody id="taskEditorBody"></tbody>
+        </table>
+      </div>
+
+      <div class="subsection-heading-row">
+        <div>
+          <h3>締切</h3>
+          <p class="tiny-muted">締切は日付単位で登録し，線表上に縦線とラベルで表示します．</p>
+        </div>
+        <button id="addDeadlineButton" type="button" class="secondary-button">＋ 締切追加</button>
+      </div>
+
+      <div class="table-container editor-table-container deadline-table-container">
+        <table class="editor-table" aria-label="締切編集表">
+          <thead>
+            <tr>
+              <th>締切名</th>
+              <th>日付</th>
+              <th>色</th>
+              <th>メモ</th>
+              <th>削除</th>
+            </tr>
+          </thead>
+          <tbody id="deadlineEditorBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading-row preview-heading">
+        <div>
+          <h2 class="section-title">4．線表プレビュー</h2>
+          <p class="description">色ブロックを直接クリックして期間を調整することもできます．</p>
+        </div>
+        <div class="toolbar output-toolbar">
+          <button id="downloadPngButton" type="button">PNG保存</button>
+          <button id="downloadSvgButton" type="button">SVG保存</button>
+        </div>
+      </div>
+
+      <div class="info-note">
+        週セルをクリックすると，その週のブロックを個別にON/OFFできます．開始週・終了週を変更すると，その範囲をまとめて塗り直します．そのため，写真の「実験解析」のように，離れた週だけを同じタスク行で着色することもできます．
+      </div>
+
+      <div id="timelineScroll" class="timeline-scroll" tabindex="0" aria-label="線表プレビュー 横スクロール領域">
+        <div id="timelineMount" class="timeline-mount"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
