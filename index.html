@@ -40,20 +40,30 @@
 
     <section class="panel compact-panel">
       <h2 class="section-title">2．表示設定</h2>
-      <div class="settings-grid">
-        <label class="field">
-          <span>線表タイトル</span>
-          <input id="titleInput" type="text" maxlength="80" value="◎線表">
-        </label>
-        <label class="field">
-          <span>表示開始週</span>
-          <select id="displayStartSelect"></select>
-        </label>
-        <label class="field">
-          <span>表示終了週</span>
-          <select id="displayEndSelect"></select>
-        </label>
-      </div>
+      <div id="timelineSettings" class="timeline-list"></div>
+      <template id="timelineSettingsTemplate">
+        <fieldset class="timeline-settings">
+          <legend></legend>
+          <div class="settings-grid">
+            <label class="field">
+              <span>線表タイトル</span>
+              <input class="timeline-title-input" type="text" maxlength="80">
+            </label>
+            <label class="field">
+              <span>表示開始週</span>
+              <select class="timeline-start"></select>
+            </label>
+            <label class="field">
+              <span>表示終了週</span>
+              <select class="timeline-end"></select>
+            </label>
+          </div>
+          <div class="toolbar timeline-settings-actions">
+            <button type="button" class="secondary-button timeline-add">＋ 線表追加</button>
+            <button type="button" class="danger-button timeline-remove">この線表を削除</button>
+          </div>
+        </fieldset>
+      </template>
       <p class="tiny-muted">各週は日曜日始まりです．月をまたぐ週は，週の開始日が属する月に表示します．</p>
     </section>
 
@@ -62,14 +72,16 @@
         <div>
           <h2 class="section-title">3．タスク管理</h2>
           <p class="description">開始週・終了週で連続範囲を一括指定できます．プレビュー上では，各週ブロックを個別にON/OFFできます．</p>
+          <p class="tiny-muted">左端のチェックボックスは，空白（未着手）→ −（実行中）→ ✓（完了）の順に切り替わります．順序は「⠿」をドラッグして変更できます．</p>
         </div>
         <button id="addTaskButton" type="button">＋ タスク追加</button>
       </div>
 
-      <div class="table-container editor-table-container">
-        <table class="editor-table" aria-label="タスク編集表">
+      <div id="taskEditorScroll" class="table-container editor-table-container">
+        <table class="editor-table task-table" aria-label="タスク編集表">
           <thead>
             <tr>
+              <th scope="col" class="task-status-cell">進捗</th>
               <th>大区分</th>
               <th>タスク名</th>
               <th>開始週</th>
@@ -114,19 +126,40 @@
           <h2 class="section-title">4．線表プレビュー</h2>
           <p class="description">色ブロックを直接クリックして期間を調整することもできます．</p>
         </div>
-        <div class="toolbar output-toolbar">
-          <button id="downloadPngButton" type="button">PNG保存</button>
-          <button id="downloadSvgButton" type="button">SVG保存</button>
+        <div class="toolbar" role="group" aria-label="すべての線表の週行">
+          <button id="showAllWeeks" type="button" class="secondary-button">すべてオン</button>
+          <button id="hideAllWeeks" type="button" class="secondary-button">すべてオフ</button>
         </div>
       </div>
 
       <div class="info-note">
-        週セルをクリックすると，その週のブロックを個別にON/OFFできます．開始週・終了週を変更すると，その範囲をまとめて塗り直します．そのため，写真の「実験解析」のように，離れた週だけを同じタスク行で着色することもできます．
+        週セルをクリックすると，その週のブロックを個別にON/OFFできます．開始週・終了週を変更すると，その範囲をまとめて塗り直します．離れた週だけを同じタスク行で着色することもできます．
       </div>
 
-      <div id="timelineScroll" class="timeline-scroll" tabindex="0" aria-label="線表プレビュー 横スクロール領域">
-        <div id="timelineMount" class="timeline-mount"></div>
-      </div>
+      <div id="timelinePreviews" class="timeline-list"></div>
+      <template id="timelinePreviewTemplate">
+        <article class="timeline-preview">
+          <div class="section-heading-row timeline-preview-heading">
+            <h3></h3>
+            <div class="toolbar">
+              <label class="week-row-toggle"><input type="checkbox">週行</label>
+              <button type="button" class="download-png">PNG保存</button>
+              <button type="button" class="download-svg">SVG保存</button>
+            </div>
+          </div>
+          <div class="week-width-controls" hidden>
+            <button type="button" class="secondary-button fit-week-width">幅を合わせる</button>
+            <label class="week-width-field">
+              <span>週セル幅</span>
+              <input type="range" class="week-width-slider">
+              <span class="week-width-value" aria-hidden="true"></span>
+            </label>
+          </div>
+          <div class="timeline-scroll" tabindex="0" role="region">
+            <div class="timeline-mount"></div>
+          </div>
+        </article>
+      </template>
     </section>
   </main>
 

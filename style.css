@@ -185,8 +185,73 @@ p {
   flex-wrap: wrap;
 }
 
-.output-toolbar {
-  margin-top: 0;
+.timeline-list {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.timeline-settings {
+  min-width: 0;
+  margin: 0;
+  padding: 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.timeline-settings legend {
+  padding: 0 0.4rem;
+  font-weight: 700;
+}
+
+.timeline-settings-actions {
+  margin-top: 0.75rem;
+}
+
+.timeline-preview-heading {
+  align-items: center;
+  margin-bottom: 0.55rem;
+}
+
+.timeline-preview-heading h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.week-row-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.55rem;
+  min-height: 42px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.week-row-toggle input {
+  accent-color: #276c39;
+}
+
+.week-width-controls:not([hidden]),
+.week-width-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.week-width-controls {
+  margin-bottom: 0.55rem;
+}
+
+.week-width-slider {
+  width: clamp(7rem, 22vw, 16rem);
+  accent-color: #276c39;
+}
+
+.week-width-value {
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
 }
 
 .message-area:empty {
@@ -355,22 +420,68 @@ tbody tr:nth-child(even) {
   background: #fafafa;
 }
 
-.editor-table td:nth-child(1) {
+.task-status-cell {
+  text-align: center;
+}
+
+.task-status-checkbox {
+  width: 1.3rem;
+  height: 1.3rem;
+  margin: 0;
+  vertical-align: middle;
+  accent-color: #276c39;
+  cursor: pointer;
+}
+
+.task-status-checkbox:indeterminate {
+  accent-color: #895312;
+}
+
+.task-table td:nth-child(2),
+.deadline-table-container td:nth-child(1) {
   min-width: 150px;
 }
 
-.editor-table td:nth-child(2) {
+.task-table td:nth-child(3),
+.deadline-table-container td:nth-child(2) {
   min-width: 200px;
 }
 
-.editor-table td:nth-child(3),
-.editor-table td:nth-child(4) {
+.task-table td:nth-child(4),
+.task-table td:nth-child(5),
+.deadline-table-container td:nth-child(3),
+.deadline-table-container td:nth-child(4) {
   min-width: 160px;
 }
 
-.order-buttons {
-  display: inline-flex;
-  gap: 0.3rem;
+.task-drag-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  font-size: 1.1rem;
+}
+
+.task-table th:nth-last-child(-n + 2),
+.task-table td:nth-last-child(-n + 2) {
+  width: 1%;
+  padding-inline: 0.3rem;
+  text-align: center;
+}
+
+.task-dragging {
+  opacity: 0.55;
+}
+
+.task-dragging .task-drag-handle {
+  cursor: grabbing;
+}
+
+.drop-before > td {
+  box-shadow: inset 0 3px #005fa3;
+}
+
+.drop-after > td {
+  box-shadow: inset 0 -3px #005fa3;
 }
 
 .tiny-muted {
@@ -414,8 +525,12 @@ tbody tr:nth-child(even) {
   cursor: pointer;
 }
 
-.timeline-week-cell:focus {
+.timeline-week-cell:focus-visible {
   outline: none;
+}
+
+.timeline-week-cell:focus-visible .week-hitbox {
+  fill: rgba(0, 95, 163, 0.3);
 }
 
 @media (hover: hover) and (pointer: fine) {

@@ -5,6 +5,14 @@
   const DEFAULT_COLOR = '#4f7ec7';
   const DEADLINE_COLOR = '#3f78c5';
   const MS_PER_DAY = 86400000;
+  const DEFAULT_TITLE = '◎線表';
+  const MIN_WEEK_CELL_WIDTH = 0.1;
+  const MAX_WEEK_CELL_WIDTH = 20;
+  const TASK_STATUSES = [
+    { value: 'not_started', label: '未着手' },
+    { value: 'running', label: '実行中' },
+    { value: 'completed', label: '完了' }
+  ];
 
   const els = {
     messageArea: document.getElementById('messageArea'),
@@ -13,16 +21,17 @@
     newProjectButton: document.getElementById('newProjectButton'),
     downloadCsvButton: document.getElementById('downloadCsvButton'),
     downloadSampleButton: document.getElementById('downloadSampleButton'),
-    titleInput: document.getElementById('titleInput'),
-    displayStartSelect: document.getElementById('displayStartSelect'),
-    displayEndSelect: document.getElementById('displayEndSelect'),
+    timelineSettings: document.getElementById('timelineSettings'),
+    timelineSettingsTemplate: document.getElementById('timelineSettingsTemplate'),
     addTaskButton: document.getElementById('addTaskButton'),
     addDeadlineButton: document.getElementById('addDeadlineButton'),
+    taskEditorScroll: document.getElementById('taskEditorScroll'),
     taskEditorBody: document.getElementById('taskEditorBody'),
     deadlineEditorBody: document.getElementById('deadlineEditorBody'),
-    timelineMount: document.getElementById('timelineMount'),
-    downloadPngButton: document.getElementById('downloadPngButton'),
-    downloadSvgButton: document.getElementById('downloadSvgButton')
+    timelinePreviews: document.getElementById('timelinePreviews'),
+    timelinePreviewTemplate: document.getElementById('timelinePreviewTemplate'),
+    showAllWeeks: document.getElementById('showAllWeeks'),
+    hideAllWeeks: document.getElementById('hideAllWeeks')
   };
 
   function makeId(prefix) {
@@ -112,26 +121,19 @@
   }
 
   function createSampleState() {
-    return {
-      title: '◎線表',
-      displayStartWeek: '2026-07-05',
-      displayEndWeek: '2027-03-28',
-      tasks: [
-        { id: makeId('task'), category: '卒業研究', name: 'ハード改良', weeks: ['2026-07-05'], color: '#4f7ec7' },
-        { id: makeId('task'), category: '卒業研究', name: '実験設計検討', weeks: ['2026-07-05', '2026-07-12'], color: '#4f7ec7' },
-        { id: makeId('task'), category: '卒業研究', name: '性能評価実験', weeks: ['2026-07-19', '2026-07-26'], color: '#4f7ec7' },
-        { id: makeId('task'), category: '卒業研究', name: '実験解析', weeks: ['2026-07-26', '2026-09-13'], color: '#4f7ec7' },
-        { id: makeId('task'), category: '卒業研究', name: '環境評価実験', weeks: ['2026-08-09', '2026-08-16'], color: '#4f7ec7' },
-        { id: makeId('task'), category: '卒業研究', name: '環境評価実装', weeks: ['2026-09-13', '2026-09-20'], color: '#4f7ec7' },
-        { id: makeId('task'), category: '卒業研究', name: '可視化App開発', weeks: ['2026-07-05', '2026-07-12', '2026-07-19', '2026-07-26', '2026-08-02'], color: '#4f7ec7' },
-        { id: makeId('task'), category: '卒業研究', name: '原稿執筆', weeks: ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25'], color: '#5f8f3e' },
-        { id: makeId('task'), category: 'その他', name: '関連研究調査', weeks: [], color: '#9b7ab7' },
-        { id: makeId('task'), category: 'その他', name: '輪講', weeks: [], color: '#9b7ab7' }
-      ],
-      deadlines: [
-        { id: makeId('deadline'), name: 'IMWUT 提出締切', date: '2026-11-01', color: DEADLINE_COLOR, note: '提出：11月1日' }
-      ]
-    };
+    const sample = createBlankState();
+    const { displayStartWeek, displayEndWeek } = sample.timelines[0];
+    const weeks = rangeWeeks(displayStartWeek, displayEndWeek);
+    const names = ['関連研究調査', 'デバイス実装', '実験', '解析', '執筆'];
+    sample.tasks = names.map((name, index) => ({
+      id: makeId('task'),
+      category: '研究',
+      name,
+      weeks: weeks.slice(index * 2, index * 2 + 2),
+      color: DEFAULT_COLOR,
+      status: TASK_STATUSES[0].value
+    }));
+    return sample;
   }
 
   function createBlankState() {
@@ -140,9 +142,13 @@
     const start = sundayOf(utcToday);
     const end = addDays(start, 7 * 26);
     return {
-      title: '◎線表',
-      displayStartWeek: isoDate(start),
-      displayEndWeek: isoDate(end),
+      timelines: [{
+        title: DEFAULT_TITLE,
+        displayStartWeek: isoDate(start),
+        displayEndWeek: isoDate(end),
+        showWeekRow: true,
+        weekCellWidth: null
+      }],
       tasks: [],
       deadlines: []
     };
@@ -153,11 +159,21 @@
     if (!input || typeof input !== 'object') return base;
     const tasks = Array.isArray(input.tasks) ? input.tasks : [];
     const deadlines = Array.isArray(input.deadlines) ? input.deadlines : [];
+    const timelines = Array.isArray(input.timelines) && input.timelines.length ? input.timelines : [input];
+    const defaultTimeline = base.timelines[0];
 
-    const sanitized = {
-      title: String(input.title || base.title).slice(0, 80),
-      displayStartWeek: normalizeSunday(input.displayStartWeek) || base.displayStartWeek,
-      displayEndWeek: normalizeSunday(input.displayEndWeek) || base.displayEndWeek,
+    return {
+      timelines: timelines.map((timeline) => {
+        const displayStartWeek = normalizeSunday(timeline.displayStartWeek) || defaultTimeline.displayStartWeek;
+        const displayEndWeek = normalizeSunday(timeline.displayEndWeek) || defaultTimeline.displayEndWeek;
+        return {
+          title: String(timeline.title || DEFAULT_TITLE).slice(0, 80),
+          displayStartWeek,
+          displayEndWeek: compareIso(displayStartWeek, displayEndWeek) <= 0 ? displayEndWeek : displayStartWeek,
+          showWeekRow: timeline.showWeekRow !== false,
+          weekCellWidth: sanitizeWeekCellWidth(timeline.weekCellWidth)
+        };
+      }),
       tasks: tasks.slice(0, 200).map((task) => {
         let weeks = sortUniqueWeeks(task.weeks);
         if (!weeks.length && task.startWeek && task.endWeek) {
@@ -170,7 +186,8 @@
           category: String(task.category || '未分類').slice(0, 50),
           name: String(task.name || '新しいタスク').slice(0, 100),
           weeks,
-          color: validColor(task.color) ? task.color : DEFAULT_COLOR
+          color: validColor(task.color) ? task.color : DEFAULT_COLOR,
+          status: TASK_STATUSES.find(({ value }) => value === task.status)?.value ?? TASK_STATUSES[0].value
         };
       }),
       deadlines: deadlines.slice(0, 30).map((deadline) => ({
@@ -181,15 +198,17 @@
         note: String(deadline.note || '').slice(0, 120)
       }))
     };
-
-    if (compareIso(sanitized.displayStartWeek, sanitized.displayEndWeek) > 0) {
-      sanitized.displayEndWeek = sanitized.displayStartWeek;
-    }
-    return sanitized;
   }
 
   function validColor(value) {
     return /^#[0-9a-fA-F]{6}$/.test(String(value || ''));
+  }
+
+  function sanitizeWeekCellWidth(value) {
+    const width = Number(value);
+    return width >= MIN_WEEK_CELL_WIDTH && width <= MAX_WEEK_CELL_WIDTH
+      ? Math.round(width * 10) / 10
+      : null;
   }
 
   function loadStoredState() {
@@ -227,7 +246,7 @@
   }
 
   function collectDateBounds() {
-    const values = [state.displayStartWeek, state.displayEndWeek];
+    const values = state.timelines.flatMap(({ displayStartWeek, displayEndWeek }) => [displayStartWeek, displayEndWeek]);
     state.tasks.forEach((task) => values.push(...task.weeks));
     state.deadlines.forEach((deadline) => {
       if (deadline.date) values.push(normalizeSunday(deadline.date));
@@ -264,7 +283,10 @@
       emptyOption.textContent = blankLabel;
       fragment.appendChild(emptyOption);
     }
-    options.forEach((week) => {
+    const weeks = selectedValue && !options.includes(selectedValue)
+      ? [...options, selectedValue].sort(compareIso)
+      : options;
+    weeks.forEach((week) => {
       const option = document.createElement('option');
       option.value = week;
       option.textContent = formatWeekLabel(week, true);
@@ -276,9 +298,53 @@
 
   function renderSettings() {
     const weekOptions = buildWeekOptionList();
-    els.titleInput.value = state.title;
-    fillWeekSelect(els.displayStartSelect, state.displayStartWeek, weekOptions);
-    fillWeekSelect(els.displayEndSelect, state.displayEndWeek, weekOptions);
+    const cards = state.timelines.map((timeline, index) => {
+      const card = els.timelineSettingsTemplate.content.firstElementChild.cloneNode(true);
+      card.querySelector('legend').textContent = `線表${index + 1}`;
+      const title = card.querySelector('.timeline-title-input');
+      const start = card.querySelector('.timeline-start');
+      const end = card.querySelector('.timeline-end');
+      title.value = timeline.title;
+      fillWeekSelect(start, timeline.displayStartWeek, weekOptions);
+      fillWeekSelect(end, timeline.displayEndWeek, weekOptions);
+
+      title.addEventListener('input', () => {
+        timeline.title = title.value.slice(0, 80);
+        persistAndRenderTimeline();
+      });
+      start.addEventListener('change', () => {
+        timeline.displayStartWeek = start.value;
+        if (compareIso(start.value, end.value) > 0) {
+          timeline.displayEndWeek = start.value;
+          fillWeekSelect(end, start.value, weekOptions);
+        }
+        persistAndRenderTimeline();
+      });
+      end.addEventListener('change', () => {
+        timeline.displayEndWeek = end.value;
+        if (compareIso(end.value, start.value) < 0) {
+          timeline.displayStartWeek = end.value;
+          fillWeekSelect(start, end.value, weekOptions);
+        }
+        persistAndRenderTimeline();
+      });
+      card.querySelector('.timeline-add').addEventListener('click', () => {
+        state.timelines.push({ ...timeline });
+        renderTimelineCards();
+        saveLocal();
+        els.timelineSettings.lastElementChild.querySelector('.timeline-start').focus();
+      });
+      const remove = card.querySelector('.timeline-remove');
+      remove.hidden = state.timelines.length === 1;
+      remove.addEventListener('click', () => {
+        state.timelines.splice(index, 1);
+        renderTimelineCards();
+        saveLocal();
+        els.timelineSettings.children[Math.min(index, state.timelines.length - 1)].querySelector('.timeline-add').focus();
+      });
+      return card;
+    });
+    els.timelineSettings.replaceChildren(...cards);
   }
 
   function taskRangeToWeeks(task, start, end) {
@@ -293,7 +359,7 @@
     if (!state.tasks.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
-      cell.colSpan = 8;
+      cell.colSpan = 9;
       cell.textContent = 'タスクがありません．「＋ タスク追加」から追加してください．';
       cell.className = 'empty-state';
       row.appendChild(cell);
@@ -304,6 +370,28 @@
       const row = document.createElement('tr');
       row.dataset.taskId = task.id;
       const bounds = selectedBounds(task);
+
+      const statusCell = document.createElement('td');
+      statusCell.className = 'task-status-cell';
+      const statusCheckbox = document.createElement('input');
+      statusCheckbox.type = 'checkbox';
+      statusCheckbox.className = 'task-status-checkbox';
+      let statusIndex = TASK_STATUSES.findIndex(({ value }) => value === task.status);
+      const updateStatusCheckbox = () => {
+        const { value, label } = TASK_STATUSES[statusIndex];
+        statusCheckbox.checked = value === 'completed';
+        statusCheckbox.indeterminate = value === 'running';
+        statusCheckbox.title = label;
+        statusCheckbox.setAttribute('aria-label', `${task.name || 'タスク'} の進捗（${label}）`);
+      };
+      updateStatusCheckbox();
+      statusCheckbox.addEventListener('change', () => {
+        statusIndex = (statusIndex + 1) % TASK_STATUSES.length;
+        task.status = TASK_STATUSES[statusIndex].value;
+        updateStatusCheckbox();
+        saveLocal();
+      });
+      statusCell.appendChild(statusCheckbox);
 
       const categoryCell = document.createElement('td');
       const categoryInput = document.createElement('input');
@@ -325,6 +413,7 @@
       nameInput.setAttribute('aria-label', 'タスク名');
       nameInput.addEventListener('input', () => {
         task.name = nameInput.value;
+        updateStatusCheckbox();
         persistAndRenderTimeline();
       });
       nameCell.appendChild(nameInput);
@@ -382,39 +471,31 @@
       countCell.appendChild(countBadge);
 
       const orderCell = document.createElement('td');
-      const orderWrap = document.createElement('div');
-      orderWrap.className = 'order-buttons';
-      const upButton = document.createElement('button');
-      upButton.type = 'button';
-      upButton.className = 'icon-button secondary-button';
-      upButton.textContent = '↑';
-      upButton.title = '上へ移動';
-      upButton.disabled = index === 0;
-      upButton.addEventListener('click', () => moveTask(index, index - 1));
-      const downButton = document.createElement('button');
-      downButton.type = 'button';
-      downButton.className = 'icon-button secondary-button';
-      downButton.textContent = '↓';
-      downButton.title = '下へ移動';
-      downButton.disabled = index === state.tasks.length - 1;
-      downButton.addEventListener('click', () => moveTask(index, index + 1));
-      orderWrap.append(upButton, downButton);
-      orderCell.appendChild(orderWrap);
+      const handle = document.createElement('button');
+      handle.type = 'button';
+      handle.className = 'icon-button secondary-button task-drag-handle';
+      handle.textContent = '⠿';
+      handle.title = 'ドラッグして並べ替え';
+      handle.setAttribute('aria-label', `${task.name} をドラッグして並べ替え`);
+      handle.addEventListener('pointerdown', (event) => startTaskDrag(event, row, index));
+      orderCell.appendChild(handle);
 
       const deleteCell = document.createElement('td');
       const deleteButton = document.createElement('button');
       deleteButton.type = 'button';
       deleteButton.className = 'icon-button danger-button';
-      deleteButton.textContent = '削除';
+      deleteButton.textContent = '×';
+      deleteButton.title = 'タスクを削除';
+      deleteButton.setAttribute('aria-label', 'タスクを削除');
       deleteButton.addEventListener('click', () => {
         if (!window.confirm(`「${task.name || 'このタスク'}」を削除しますか？`)) return;
         state.tasks.splice(index, 1);
-        renderAll();
-        saveLocal();
+        renderTaskEditor();
+        persistAndRenderTimeline();
       });
       deleteCell.appendChild(deleteButton);
 
-      row.append(categoryCell, nameCell, startCell, endCell, colorCell, countCell, orderCell, deleteCell);
+      row.append(statusCell, categoryCell, nameCell, startCell, endCell, colorCell, countCell, orderCell, deleteCell);
       fragment.appendChild(row);
     });
 
@@ -422,11 +503,89 @@
   }
 
   function moveTask(from, to) {
-    if (to < 0 || to >= state.tasks.length) return;
+    if (from === to) return;
     const [item] = state.tasks.splice(from, 1);
     state.tasks.splice(to, 0, item);
     renderTaskEditor();
     persistAndRenderTimeline();
+  }
+
+  function startTaskDrag(event, sourceRow, from) {
+    if (!event.isPrimary || event.button !== 0 || state.tasks.length < 2) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    const scroller = els.taskEditorScroll;
+    const header = scroller.querySelector('thead');
+    const rows = Array.from(els.taskEditorBody.children).filter((row) => row !== sourceRow);
+    const listeners = new AbortController();
+    const { signal } = listeners;
+    let pointer = event;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let targetIndex = from;
+    let marker = null;
+    let frame;
+
+    function updateTarget() {
+      const bounds = scroller.getBoundingClientRect();
+      const top = bounds.top + header.getBoundingClientRect().height;
+      marker?.classList.remove('drop-before', 'drop-after');
+      marker = null;
+      if (pointer.clientX < bounds.left || pointer.clientX > bounds.right ||
+          pointer.clientY < bounds.top || pointer.clientY > bounds.bottom) return;
+
+      const y = Math.max(top, pointer.clientY);
+      const next = rows.findIndex((row) => {
+        const rect = row.getBoundingClientRect();
+        return y < rect.top + rect.height / 2;
+      });
+      targetIndex = next < 0 ? rows.length : next;
+      if (targetIndex === from) return;
+      marker = next < 0 ? rows[rows.length - 1] : rows[next];
+      marker.classList.add(next < 0 ? 'drop-after' : 'drop-before');
+    }
+
+    function autoScroll() {
+      const bounds = scroller.getBoundingClientRect();
+      if (pointer.clientX >= bounds.left && pointer.clientX <= bounds.right &&
+          pointer.clientY >= bounds.top && pointer.clientY <= bounds.bottom) {
+        const topEdge = bounds.top + header.getBoundingClientRect().height + 28;
+        const bottomEdge = bounds.bottom - 28;
+        const scrollTop = scroller.scrollTop;
+        if (pointer.clientY < topEdge) scroller.scrollTop -= Math.min(16, (topEdge - pointer.clientY) / 2);
+        else if (pointer.clientY > bottomEdge) scroller.scrollTop += Math.min(16, (pointer.clientY - bottomEdge) / 2);
+        if (scroller.scrollTop !== scrollTop) updateTarget();
+      }
+      frame = window.requestAnimationFrame(autoScroll);
+    }
+
+    function finish(event) {
+      if (event.pointerId !== pointerId) return;
+      pointer = event;
+      if (frame !== undefined) updateTarget();
+      const dropped = event.type === 'pointerup' && marker !== null;
+      listeners.abort();
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+      marker?.classList.remove('drop-before', 'drop-after');
+      sourceRow.classList.remove('task-dragging');
+      if (dropped) moveTask(from, targetIndex);
+    }
+
+    handle.setPointerCapture(pointerId);
+    handle.addEventListener('pointermove', (event) => {
+      if (event.pointerId !== pointerId) return;
+      pointer = event;
+      if (frame === undefined) {
+        if (Math.hypot(event.clientX - startX, event.clientY - startY) < 5) return;
+        sourceRow.classList.add('task-dragging');
+        frame = window.requestAnimationFrame(autoScroll);
+      }
+      updateTarget();
+    }, { signal });
+    handle.addEventListener('pointerup', finish, { signal });
+    handle.addEventListener('pointercancel', finish, { signal });
+    handle.addEventListener('lostpointercapture', finish, { signal });
   }
 
   function renderDeadlineEditor() {
@@ -602,9 +761,22 @@
     return Math.ceil(Math.max(minWidth, Math.min(maxWidth, widest + padding)));
   }
 
-  function getSvgMarkup() {
-    const weeks = rangeWeeks(state.displayStartWeek, state.displayEndWeek);
+  function fitText(text, width, fontSize, fontWeight = 400) {
+    if (measureTextWidth(text, fontSize, fontWeight) <= width) return text;
+    if (measureTextWidth('…', fontSize, fontWeight) > width) return '';
+    const characters = [...text];
+    while (characters.length && measureTextWidth(`${characters.join('')}…`, fontSize, fontWeight) > width) {
+      characters.pop();
+    }
+    return `${characters.join('')}…`;
+  }
+
+  function getSvgMarkup(timeline, availableWidth) {
+    const weeks = rangeWeeks(timeline.displayStartWeek, timeline.displayEndWeek);
     if (!weeks.length) return { markup: '', width: 0, height: 0 };
+    const compact = !timeline.showWeekRow;
+    const autoFit = compact && timeline.weekCellWidth === null;
+    const fitWidth = availableWidth || 900;
 
     // 線表プレビューには，表示区間内に1週以上設定されているタスクだけを表示する．
     // タスク編集欄やCSV上のデータ自体は削除せず，プレビュー上だけを絞り込む．
@@ -615,29 +787,32 @@
 
     // 固定幅ではなく，現在表示している文字列に合わせて列幅を決める．
     // 週列は「12/27~」程度が収まる最小限の幅にすることで，長期間表示時の横幅を抑える．
-    const categoryWidth = fitColumnWidth(
+    const naturalCategoryWidth = fitColumnWidth(
       visibleTasks.map((task) => task.category || '未分類'),
       { fontSize: 15, fontWeight: 600, padding: 16, minWidth: 64, maxWidth: 145 }
     );
-    const taskWidth = fitColumnWidth(
+    const naturalTaskWidth = fitColumnWidth(
       visibleTasks.map((task) => task.name || '名称未設定'),
       { fontSize: 14, fontWeight: 400, padding: 16, minWidth: 84, maxWidth: 230 }
     );
-    const weekWidth = fitColumnWidth(
-      weeks.map((week) => formatWeekLabel(week, false)),
-      { fontSize: 12.5, fontWeight: 400, padding: 6, minWidth: 42, maxWidth: 50 }
-    );
+    const categoryWidth = compact ? Math.min(naturalCategoryWidth, Math.floor(fitWidth * 0.23)) : naturalCategoryWidth;
+    const taskWidth = compact ? Math.min(naturalTaskWidth, Math.floor(fitWidth * 0.37)) : naturalTaskWidth;
     const leftWidth = categoryWidth + taskWidth;
+    const weekWidth = compact
+      ? timeline.weekCellWidth ?? (fitWidth - leftWidth) / weeks.length
+      : fitColumnWidth(weeks.map((week) => formatWeekLabel(week, false)),
+        { fontSize: 12.5, padding: 6, minWidth: 42, maxWidth: 50 });
     const titleHeight = 48;
     const headerRowHeight = 36;
-    const headerHeight = headerRowHeight * 3;
+    const headerLabels = compact ? ['年', '月'] : ['年', '月', '週'];
+    const headerHeight = headerRowHeight * headerLabels.length;
     const taskRowHeight = 44;
     const tableTop = titleHeight;
     const taskTop = tableTop + headerHeight;
     const tableBottom = taskTop + visibleTasks.length * taskRowHeight;
     const deadlines = visibleDeadlines(weeks);
     const deadlineAreaHeight = deadlines.length ? 24 + deadlines.length * 72 : 18;
-    const width = leftWidth + weeks.length * weekWidth;
+    const width = autoFit ? fitWidth : leftWidth + weeks.length * weekWidth;
     const height = tableBottom + deadlineAreaHeight;
 
     const yearSpans = groupedSpans(weeks, (week) => String(parseISODate(week).getUTCFullYear()));
@@ -649,12 +824,13 @@
 
     const lines = [];
     const textBase = 'font-family="Segoe UI, system-ui, sans-serif" fill="#333"';
-    lines.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(state.title || '進捗線表')}">`);
+    const title = timeline.title || DEFAULT_TITLE;
+    lines.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="group" aria-label="${escapeXml(title)}">`);
     lines.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>`);
-    lines.push(`<text x="4" y="31" ${textBase} font-size="24" font-weight="700">${escapeXml(state.title || '◎線表')}</text>`);
+    lines.push(`<text x="4" y="31" ${textBase} font-size="24" font-weight="700">${escapeXml(compact ? fitText(title, width - 8, 24, 700) : title)}</text>`);
 
     // 左側ヘッダ
-    ['年', '月', '週'].forEach((label, row) => {
+    headerLabels.forEach((label, row) => {
       const y = tableTop + row * headerRowHeight;
       lines.push(`<rect x="0" y="${y}" width="${categoryWidth}" height="${headerRowHeight}" fill="#f2f2f2" stroke="#555" stroke-width="1"/>`);
       lines.push(`<rect x="${categoryWidth}" y="${y}" width="${taskWidth}" height="${headerRowHeight}" fill="#f2f2f2" stroke="#555" stroke-width="1"/>`);
@@ -665,7 +841,11 @@
       const x = leftWidth + span.start * weekWidth;
       const w = span.count * weekWidth;
       lines.push(`<rect x="${x}" y="${tableTop}" width="${w}" height="${headerRowHeight}" fill="#f2f2f2" stroke="#555" stroke-width="1"/>`);
-      lines.push(`<text x="${x + w / 2}" y="${tableTop + headerRowHeight / 2 + 1}" ${textBase} font-size="16" text-anchor="middle" dominant-baseline="middle">${escapeXml(span.key)} 年</text>`);
+      const label = `${span.key} 年`;
+      const text = compact && measureTextWidth(label, 16) + 4 > w ? span.key : label;
+      if (!compact || measureTextWidth(text, 16) + 4 <= w) {
+        lines.push(`<text x="${x + w / 2}" y="${tableTop + headerRowHeight / 2 + 1}" ${textBase} font-size="16" text-anchor="middle" dominant-baseline="middle">${escapeXml(text)}</text>`);
+      }
     });
 
     monthSpans.forEach((span) => {
@@ -674,10 +854,14 @@
       const [, month] = span.key.split('-');
       const y = tableTop + headerRowHeight;
       lines.push(`<rect x="${x}" y="${y}" width="${w}" height="${headerRowHeight}" fill="#f6f6f6" stroke="#555" stroke-width="1"/>`);
-      lines.push(`<text x="${x + w / 2}" y="${y + headerRowHeight / 2 + 1}" ${textBase} font-size="15" text-anchor="middle" dominant-baseline="middle">${Number(month)} 月</text>`);
+      const label = `${Number(month)} 月`;
+      const text = compact && measureTextWidth(label, 15) + 4 > w ? String(Number(month)) : label;
+      if (!compact || measureTextWidth(text, 15) + 4 <= w) {
+        lines.push(`<text x="${x + w / 2}" y="${y + headerRowHeight / 2 + 1}" ${textBase} font-size="15" text-anchor="middle" dominant-baseline="middle">${text}</text>`);
+      }
     });
 
-    weeks.forEach((week, index) => {
+    if (!compact) weeks.forEach((week, index) => {
       const x = leftWidth + index * weekWidth;
       const y = tableTop + headerRowHeight * 2;
       lines.push(`<rect x="${x}" y="${y}" width="${weekWidth}" height="${headerRowHeight}" fill="#fafafa" stroke="#555" stroke-width="1"/>`);
@@ -690,52 +874,133 @@
       const h = span.count * taskRowHeight;
       const fill = spanIndex % 2 === 0 ? '#fbfbfb' : '#f7f7f7';
       lines.push(`<rect x="0" y="${y}" width="${categoryWidth}" height="${h}" fill="${fill}" stroke="#555" stroke-width="1"/>`);
-      lines.push(`<text x="8" y="${y + 16}" ${textBase} font-size="15" font-weight="600" dominant-baseline="hanging">${escapeXml(span.key)}</text>`);
+      const label = compact ? fitText(span.key, categoryWidth - 16, 15, 600) : span.key;
+      lines.push(`<text x="8" y="${y + 16}" ${textBase} font-size="15" font-weight="600" dominant-baseline="hanging">${escapeXml(label)}</text>`);
     });
 
     visibleTasks.forEach((task, taskIndex) => {
       const y = taskTop + taskIndex * taskRowHeight;
       lines.push(`<rect x="${categoryWidth}" y="${y}" width="${taskWidth}" height="${taskRowHeight}" fill="#ffffff" stroke="#555" stroke-width="1"/>`);
-      lines.push(`<text x="${categoryWidth + 8}" y="${y + taskRowHeight / 2 + 1}" ${textBase} font-size="14" dominant-baseline="middle">${escapeXml(task.name || '名称未設定')}</text>`);
+      const name = task.name || '名称未設定';
+      const label = compact ? fitText(name, taskWidth - 16, 14) : name;
+      lines.push(`<text x="${categoryWidth + 8}" y="${y + taskRowHeight / 2 + 1}" ${textBase} font-size="14" dominant-baseline="middle">${escapeXml(label)}</text>`);
+      if (compact) {
+        lines.push(`<rect x="${leftWidth}" y="${y}" width="${width - leftWidth}" height="${taskRowHeight}" fill="#ffffff" stroke="#777" stroke-width="0.8"/>`);
+      }
 
       const selected = new Set(task.weeks);
+      const inset = compact ? 0 : 2;
+      const hitboxStyle = compact ? 'fill="transparent"' : 'fill="#ffffff" stroke="#777" stroke-width="0.8"';
       weeks.forEach((week, weekIndex) => {
         const x = leftWidth + weekIndex * weekWidth;
         lines.push(`<g class="timeline-week-cell" data-task-id="${escapeXml(task.id)}" data-week="${week}" tabindex="0" role="button" aria-label="${escapeXml(task.name)} ${escapeXml(formatWeekLabel(week, true))} の選択を切り替える">`);
-        lines.push(`<rect class="week-hitbox" x="${x}" y="${y}" width="${weekWidth}" height="${taskRowHeight}" fill="#ffffff" stroke="#777" stroke-width="0.8"/>`);
+        lines.push(`<rect class="week-hitbox" x="${x}" y="${y}" width="${weekWidth}" height="${taskRowHeight}" ${hitboxStyle}/>`);
         if (selected.has(week)) {
-          lines.push(`<rect x="${x + 2}" y="${y + 5}" width="${weekWidth - 4}" height="${taskRowHeight - 10}" rx="4" fill="${escapeXml(task.color)}" opacity="0.92" pointer-events="none"/>`);
+          lines.push(`<rect x="${x + inset}" y="${y + 5}" width="${weekWidth - inset * 2}" height="${taskRowHeight - 10}" rx="${compact ? 0 : 4}" fill="${escapeXml(task.color)}" opacity="0.92" pointer-events="none"/>`);
         }
         lines.push('</g>');
       });
     });
 
+    if (compact) {
+      const monthStarts = new Set(monthSpans.map(({ start }) => start));
+      const weekBoundaries = [];
+      const monthBoundaries = [];
+      for (let index = 1; index < weeks.length; index += 1) {
+        const x = leftWidth + index * weekWidth;
+        if (monthStarts.has(index)) monthBoundaries.push(`M${x} ${taskTop}V${tableBottom}`);
+        else weekBoundaries.push(`M${x} ${taskTop - 5}V${tableBottom}`);
+      }
+      lines.push(`<path class="week-boundaries" d="${weekBoundaries.join(' ')}" fill="none" stroke="#6d788b" stroke-width="${Math.min(0.65, weekWidth * 0.3)}" pointer-events="none"/>`);
+      lines.push(`<path class="month-boundaries" d="${monthBoundaries.join(' ')}" fill="none" stroke="#586576" stroke-width="${Math.min(1, weekWidth * 0.6)}" pointer-events="none"/>`);
+    }
+
     // 締切線と吹き出し
     deadlines.forEach((deadline, index) => {
       const x = deadlineX(deadline.date, weeks, leftWidth, weekWidth);
-      const boxWidth = 236;
+      const boxWidth = Math.min(236, Math.max(1, width - 8));
       const boxHeight = 58;
       const boxY = tableBottom + 18 + index * 72;
-      const boxX = Math.max(leftWidth + 4, Math.min(width - boxWidth - 4, x - boxWidth / 2));
+      const boxX = Math.max(Math.min(leftWidth + 4, width - boxWidth - 4), Math.min(width - boxWidth - 4, x - boxWidth / 2));
       const color = validColor(deadline.color) ? deadline.color : DEADLINE_COLOR;
-      lines.push(`<line x1="${x}" y1="${tableTop}" x2="${x}" y2="${boxY}" stroke="${color}" stroke-width="4"/>`);
+      lines.push(`<line x1="${x}" y1="${tableTop}" x2="${x}" y2="${boxY}" stroke="${color}" stroke-width="${compact ? 1.5 : 4}" pointer-events="none"/>`);
       lines.push(`<rect x="${boxX}" y="${boxY}" width="${boxWidth}" height="${boxHeight}" rx="2" fill="#ffffff" stroke="${color}" stroke-width="3"/>`);
-      lines.push(`<text x="${boxX + 14}" y="${boxY + 20}" ${textBase} font-size="14" font-weight="700">${escapeXml(deadline.name || '締切')}</text>`);
+      lines.push(`<text x="${boxX + 14}" y="${boxY + 20}" ${textBase} font-size="14" font-weight="700">${escapeXml(fitText(deadline.name || '締切', boxWidth - 28, 14, 700))}</text>`);
       const sub = deadline.note || `日付：${formatDateLabel(deadline.date)}`;
-      lines.push(`<text x="${boxX + 14}" y="${boxY + 42}" ${textBase} font-size="13">${escapeXml(sub)}</text>`);
+      lines.push(`<text x="${boxX + 14}" y="${boxY + 42}" ${textBase} font-size="13">${escapeXml(fitText(sub, boxWidth - 28, 13))}</text>`);
     });
 
     lines.push('</svg>');
-    return { markup: lines.join(''), width, height };
+    return { markup: lines.join(''), width, height, weekWidth };
   }
 
-  function renderTimeline() {
-    const { markup } = getSvgMarkup();
-    if (!markup) {
-      els.timelineMount.innerHTML = '<div class="empty-state">表示期間を確認してください．</div>';
-      return;
-    }
-    els.timelineMount.innerHTML = markup;
+  let previewCards = [];
+
+  function renderTimelineCards() {
+    renderSettings();
+    previewCards = state.timelines.map((timeline, index) => {
+      const card = els.timelinePreviewTemplate.content.firstElementChild.cloneNode(true);
+      const heading = card.querySelector('h3');
+      const scroll = card.querySelector('.timeline-scroll');
+      const mount = card.querySelector('.timeline-mount');
+      const toggle = card.querySelector('.week-row-toggle input');
+      const widthControls = card.querySelector('.week-width-controls');
+      const widthSlider = card.querySelector('.week-width-slider');
+      const widthValue = card.querySelector('.week-width-value');
+      const fitButton = card.querySelector('.fit-week-width');
+      const preview = { card, heading, scroll, mount, toggle, timeline, widthControls, widthSlider, widthValue };
+      heading.id = `timeline-heading-${index + 1}`;
+      scroll.setAttribute('aria-labelledby', heading.id);
+      toggle.setAttribute('aria-label', `線表${index + 1}の週行`);
+      toggle.addEventListener('change', () => {
+        timeline.showWeekRow = toggle.checked;
+        persistAndRenderTimeline();
+      });
+      widthSlider.min = MIN_WEEK_CELL_WIDTH;
+      widthSlider.max = MAX_WEEK_CELL_WIDTH;
+      widthSlider.step = 0.1;
+      widthSlider.addEventListener('input', () => {
+        timeline.weekCellWidth = widthSlider.valueAsNumber;
+        renderTimelineCard(preview, index);
+        saveLocal();
+      });
+      fitButton.addEventListener('click', () => {
+        timeline.weekCellWidth = null;
+        renderTimelineCard(preview, index);
+        saveLocal();
+      });
+      card.querySelector('.download-svg').addEventListener('click', () => downloadSvg(timeline, scroll.clientWidth));
+      card.querySelector('.download-png').addEventListener('click', () => downloadPng(timeline, scroll.clientWidth));
+      return preview;
+    });
+    els.timelinePreviews.replaceChildren(...previewCards.map(({ card }) => card));
+    renderTimeline();
+  }
+
+  function renderTimeline(compactOnly = false) {
+    previewCards.forEach((preview, index) => {
+      if (!compactOnly || !preview.timeline.showWeekRow) renderTimelineCard(preview, index);
+    });
+  }
+
+  function renderTimelineCard(preview, index) {
+    const { heading, scroll, mount, toggle, timeline, widthControls, widthSlider, widthValue } = preview;
+    heading.textContent = `線表${index + 1}`;
+    toggle.checked = timeline.showWeekRow;
+    widthControls.hidden = timeline.showWeekRow;
+    const { markup, weekWidth } = getSvgMarkup(timeline, scroll.clientWidth);
+    mount.innerHTML = markup || '<div class="empty-state">表示期間を確認してください．</div>';
+    if (timeline.showWeekRow || !weekWidth) return;
+    const px = Math.round(weekWidth * 10) / 10;
+    widthSlider.value = px;
+    const label = timeline.weekCellWidth === null ? `自動（${px} px）` : `${px} px`;
+    widthSlider.setAttribute('aria-valuetext', label);
+    widthValue.textContent = label;
+  }
+
+  function setAllWeekRows(showWeekRow) {
+    state.timelines.forEach((timeline) => { timeline.showWeekRow = showWeekRow; });
+    persistAndRenderTimeline();
   }
 
   function persistAndRenderTimeline() {
@@ -744,10 +1009,9 @@
   }
 
   function renderAll() {
-    renderSettings();
     renderTaskEditor();
     renderDeadlineEditor();
-    renderTimeline();
+    renderTimelineCards();
   }
 
   function toggleTaskWeek(taskId, week) {
@@ -769,9 +1033,11 @@
   }
 
   function stateToCsv(currentState) {
-    const headers = ['record_type', 'order', 'category', 'name', 'start_week', 'end_week', 'weeks', 'date', 'color', 'note'];
+    const headers = ['record_type', 'order', 'category', 'name', 'start_week', 'end_week', 'weeks', 'date', 'color', 'note', 'status', 'show_week_row', 'week_cell_width'];
     const rows = [headers];
-    rows.push(['settings', '', '', currentState.title, currentState.displayStartWeek, currentState.displayEndWeek, '', '', '', '']);
+    currentState.timelines.forEach((timeline) => {
+      rows.push(['settings', '', '', timeline.title, timeline.displayStartWeek, timeline.displayEndWeek, '', '', '', '', '', timeline.showWeekRow ? '1' : '0', timeline.weekCellWidth]);
+    });
 
     currentState.tasks.forEach((task, index) => {
       const bounds = selectedBounds(task);
@@ -785,6 +1051,9 @@
         sortUniqueWeeks(task.weeks).join(';'),
         '',
         task.color,
+        '',
+        task.status,
+        '',
         ''
       ]);
     });
@@ -800,7 +1069,10 @@
         '',
         deadline.date,
         deadline.color,
-        deadline.note
+        deadline.note,
+        '',
+        '',
+        ''
       ]);
     });
 
@@ -854,9 +1126,8 @@
     const idx = Object.fromEntries(headers.map((h, i) => [h, i]));
     const hasType = Object.prototype.hasOwnProperty.call(idx, 'record_type');
 
-    const imported = createBlankState();
-    imported.tasks = [];
-    imported.deadlines = [];
+    const imported = { timelines: [], tasks: [], deadlines: [] };
+    const defaultTimeline = createBlankState().timelines[0];
     let normalizedCount = 0;
 
     function get(row, key, fallback = '') {
@@ -869,11 +1140,16 @@
       const type = hasType ? get(row, 'record_type').toLowerCase() : 'task';
 
       if (type === 'settings') {
-        imported.title = get(row, 'name') || imported.title;
-        const startRaw = get(row, 'start_week');
-        const endRaw = get(row, 'end_week');
-        if (startRaw) imported.displayStartWeek = normalizeSunday(startRaw) || imported.displayStartWeek;
-        if (endRaw) imported.displayEndWeek = normalizeSunday(endRaw) || imported.displayEndWeek;
+        let start = normalizeSunday(get(row, 'start_week')) || defaultTimeline.displayStartWeek;
+        let end = normalizeSunday(get(row, 'end_week')) || defaultTimeline.displayEndWeek;
+        if (compareIso(start, end) > 0) [start, end] = [end, start];
+        imported.timelines.push({
+          title: get(row, 'name'),
+          displayStartWeek: start,
+          displayEndWeek: end,
+          showWeekRow: get(row, 'show_week_row') !== '0',
+          weekCellWidth: get(row, 'week_cell_width')
+        });
         return;
       }
 
@@ -921,16 +1197,13 @@
         name,
         weeks: sortUniqueWeeks(weeks),
         color: validColor(get(row, 'color')) ? get(row, 'color') : DEFAULT_COLOR,
+        status: get(row, 'status'),
         _order: Number.isFinite(orderValue) && orderValue > 0 ? orderValue : imported.tasks.length + 1
       });
     });
 
     imported.tasks.sort((a, b) => a._order - b._order);
     imported.tasks.forEach((task) => { delete task._order; });
-
-    if (compareIso(imported.displayStartWeek, imported.displayEndWeek) > 0) {
-      [imported.displayStartWeek, imported.displayEndWeek] = [imported.displayEndWeek, imported.displayStartWeek];
-    }
 
     return { state: sanitizeState(imported), normalizedCount };
   }
@@ -946,27 +1219,28 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function fileSafeTitle() {
-    const raw = state.title.replace(/[\\/:*?"<>|]/g, '_').replace(/^◎/, '').trim();
+  function fileSafeTitle(timeline) {
+    const raw = timeline.title.replace(/[\\/:*?"<>|]/g, '_').replace(/^◎/, '').trim();
     return raw || 'progress_timeline';
   }
 
-  function downloadCsv(currentState = state, filename = `${fileSafeTitle()}.csv`) {
+  function downloadCsv(currentState = state, filename = `${fileSafeTitle(currentState.timelines[0])}.csv`) {
     const csv = stateToCsv(currentState);
     downloadBlob(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }), filename);
   }
 
-  function downloadSvg() {
-    const { markup } = getSvgMarkup();
+  function downloadSvg(timeline, availableWidth) {
+    const { markup } = getSvgMarkup(timeline, availableWidth);
     if (!markup) return;
-    downloadBlob(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), `${fileSafeTitle()}.svg`);
+    downloadBlob(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), `${fileSafeTitle(timeline)}.svg`);
   }
 
-  function downloadPng() {
-    const { markup, width, height } = getSvgMarkup();
+  function downloadPng(timeline, availableWidth) {
+    const { markup, width, height } = getSvgMarkup(timeline, availableWidth);
     if (!markup || !width || !height) return;
     const blob = new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
+    const filename = `${fileSafeTitle(timeline)}.png`;
     const image = new Image();
     image.onload = () => {
       const scale = 2;
@@ -984,7 +1258,7 @@
           showMessage('PNGの生成に失敗しました．SVG保存を利用してください．', 'error');
           return;
         }
-        downloadBlob(pngBlob, `${fileSafeTitle()}.png`);
+        downloadBlob(pngBlob, filename);
       }, 'image/png');
     };
     image.onerror = () => {
@@ -995,21 +1269,22 @@
   }
 
   function addTask() {
-    const defaultWeek = state.displayStartWeek;
-    const previousCategory = state.tasks.length ? state.tasks[state.tasks.length - 1].category : '卒業研究';
+    const defaultWeek = state.timelines[0].displayStartWeek;
+    const previousCategory = state.tasks.length ? state.tasks[state.tasks.length - 1].category : '未分類';
     state.tasks.push({
       id: makeId('task'),
       category: previousCategory,
       name: '新しいタスク',
       weeks: [defaultWeek],
-      color: DEFAULT_COLOR
+      color: DEFAULT_COLOR,
+      status: TASK_STATUSES[0].value
     });
     renderTaskEditor();
     persistAndRenderTimeline();
   }
 
   function addDeadline() {
-    const fallback = state.displayEndWeek;
+    const fallback = state.timelines[0].displayEndWeek;
     state.deadlines.push({
       id: makeId('deadline'),
       name: '新しい締切',
@@ -1021,32 +1296,11 @@
     persistAndRenderTimeline();
   }
 
-  els.titleInput.addEventListener('input', () => {
-    state.title = els.titleInput.value.slice(0, 80);
-    persistAndRenderTimeline();
-  });
-
-  els.displayStartSelect.addEventListener('change', () => {
-    const next = els.displayStartSelect.value;
-    state.displayStartWeek = next;
-    if (compareIso(state.displayEndWeek, next) < 0) state.displayEndWeek = next;
-    renderSettings();
-    persistAndRenderTimeline();
-  });
-
-  els.displayEndSelect.addEventListener('change', () => {
-    const next = els.displayEndSelect.value;
-    state.displayEndWeek = next;
-    if (compareIso(state.displayStartWeek, next) > 0) state.displayStartWeek = next;
-    renderSettings();
-    persistAndRenderTimeline();
-  });
-
   els.addTaskButton.addEventListener('click', addTask);
   els.addDeadlineButton.addEventListener('click', addDeadline);
   els.downloadCsvButton.addEventListener('click', () => downloadCsv());
-  els.downloadSvgButton.addEventListener('click', downloadSvg);
-  els.downloadPngButton.addEventListener('click', downloadPng);
+  els.showAllWeeks.addEventListener('click', () => setAllWeekRows(true));
+  els.hideAllWeeks.addEventListener('click', () => setAllWeekRows(false));
 
   els.downloadSampleButton.addEventListener('click', () => {
     downloadCsv(createSampleState(), 'sample_schedule.csv');
@@ -1083,20 +1337,31 @@
     }
   });
 
-  els.timelineMount.addEventListener('click', (event) => {
+  els.timelinePreviews.addEventListener('click', (event) => {
     const cell = event.target.closest('[data-task-id][data-week]');
     if (!cell) return;
     toggleTaskWeek(cell.dataset.taskId, cell.dataset.week);
   });
 
-  els.timelineMount.addEventListener('keydown', (event) => {
+  els.timelinePreviews.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const cell = event.target.closest('[data-task-id][data-week]');
     if (!cell) return;
     event.preventDefault();
-    toggleTaskWeek(cell.dataset.taskId, cell.dataset.week);
+    const { taskId, week } = cell.dataset;
+    const mount = cell.closest('.timeline-mount');
+    toggleTaskWeek(taskId, week);
+    const replacement = mount.querySelector(`[data-task-id="${CSS.escape(taskId)}"][data-week="${week}"]`);
+    (replacement || mount.parentElement).focus({ preventScroll: true });
   });
 
   renderAll();
   saveLocal();
+  let previewWidth = els.timelinePreviews.clientWidth;
+  new ResizeObserver(() => {
+    const width = els.timelinePreviews.clientWidth;
+    if (previewWidth === width) return;
+    previewWidth = width;
+    renderTimeline(true);
+  }).observe(els.timelinePreviews);
 })();
