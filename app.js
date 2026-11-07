@@ -7,7 +7,7 @@
   const MS_PER_DAY = 86400000;
   const DEFAULT_TITLE = '◎線表';
   const MIN_WEEK_CELL_WIDTH = 0.1;
-  const MAX_WEEK_CELL_WIDTH = 20;
+  const MAX_WEEK_CELL_WIDTH = 50;
   const TASK_STATUSES = [
     { value: 'not_started', label: '未着手' },
     { value: 'running', label: '実行中' },
@@ -775,7 +775,7 @@
     const weeks = rangeWeeks(timeline.displayStartWeek, timeline.displayEndWeek);
     if (!weeks.length) return { markup: '', width: 0, height: 0 };
     const compact = !timeline.showWeekRow;
-    const autoFit = compact && timeline.weekCellWidth === null;
+    const autoFit = timeline.weekCellWidth === null;
     const fitWidth = availableWidth || 900;
 
     // 線表プレビューには，表示区間内に1週以上設定されているタスクだけを表示する．
@@ -785,8 +785,7 @@
       task.weeks.some((week) => visibleWeekSet.has(week))
     );
 
-    // 固定幅ではなく，現在表示している文字列に合わせて列幅を決める．
-    // 週列は「12/27~」程度が収まる最小限の幅にすることで，長期間表示時の横幅を抑える．
+    // 左側の列幅は表示する文字列に合わせ，週の表示領域を確保する．
     const naturalCategoryWidth = fitColumnWidth(
       visibleTasks.map((task) => task.category || '未分類'),
       { fontSize: 15, fontWeight: 600, padding: 16, minWidth: 64, maxWidth: 145 }
@@ -795,13 +794,11 @@
       visibleTasks.map((task) => task.name || '名称未設定'),
       { fontSize: 14, fontWeight: 400, padding: 16, minWidth: 84, maxWidth: 230 }
     );
-    const categoryWidth = compact ? Math.min(naturalCategoryWidth, Math.floor(fitWidth * 0.23)) : naturalCategoryWidth;
-    const taskWidth = compact ? Math.min(naturalTaskWidth, Math.floor(fitWidth * 0.37)) : naturalTaskWidth;
+    const categoryWidth = Math.min(naturalCategoryWidth, Math.floor(fitWidth * 0.23));
+    const taskWidth = Math.min(naturalTaskWidth, Math.floor(fitWidth * 0.37));
     const leftWidth = categoryWidth + taskWidth;
-    const weekWidth = compact
-      ? timeline.weekCellWidth ?? (fitWidth - leftWidth) / weeks.length
-      : fitColumnWidth(weeks.map((week) => formatWeekLabel(week, false)),
-        { fontSize: 12.5, padding: 6, minWidth: 42, maxWidth: 50 });
+    const weekWidth = timeline.weekCellWidth ?? (fitWidth - leftWidth) / weeks.length;
+    const weekStrokeWidth = Math.min(0.8, weekWidth * 0.3);
     const titleHeight = 48;
     const headerRowHeight = 36;
     const headerLabels = compact ? ['年', '月'] : ['年', '月', '週'];
@@ -827,7 +824,7 @@
     const title = timeline.title || DEFAULT_TITLE;
     lines.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="group" aria-label="${escapeXml(title)}">`);
     lines.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>`);
-    lines.push(`<text x="4" y="31" ${textBase} font-size="24" font-weight="700">${escapeXml(compact ? fitText(title, width - 8, 24, 700) : title)}</text>`);
+    lines.push(`<text x="4" y="31" ${textBase} font-size="24" font-weight="700">${escapeXml(fitText(title, width - 8, 24, 700))}</text>`);
 
     // 左側ヘッダ
     headerLabels.forEach((label, row) => {
@@ -842,8 +839,8 @@
       const w = span.count * weekWidth;
       lines.push(`<rect x="${x}" y="${tableTop}" width="${w}" height="${headerRowHeight}" fill="#f2f2f2" stroke="#555" stroke-width="1"/>`);
       const label = `${span.key} 年`;
-      const text = compact && measureTextWidth(label, 16) + 4 > w ? span.key : label;
-      if (!compact || measureTextWidth(text, 16) + 4 <= w) {
+      const text = measureTextWidth(label, 16) + 4 > w ? span.key : label;
+      if (measureTextWidth(text, 16) + 4 <= w) {
         lines.push(`<text x="${x + w / 2}" y="${tableTop + headerRowHeight / 2 + 1}" ${textBase} font-size="16" text-anchor="middle" dominant-baseline="middle">${escapeXml(text)}</text>`);
       }
     });
@@ -855,18 +852,28 @@
       const y = tableTop + headerRowHeight;
       lines.push(`<rect x="${x}" y="${y}" width="${w}" height="${headerRowHeight}" fill="#f6f6f6" stroke="#555" stroke-width="1"/>`);
       const label = `${Number(month)} 月`;
-      const text = compact && measureTextWidth(label, 15) + 4 > w ? String(Number(month)) : label;
-      if (!compact || measureTextWidth(text, 15) + 4 <= w) {
+      const text = measureTextWidth(label, 15) + 4 > w ? String(Number(month)) : label;
+      if (measureTextWidth(text, 15) + 4 <= w) {
         lines.push(`<text x="${x + w / 2}" y="${y + headerRowHeight / 2 + 1}" ${textBase} font-size="15" text-anchor="middle" dominant-baseline="middle">${text}</text>`);
       }
     });
 
-    if (!compact) weeks.forEach((week, index) => {
-      const x = leftWidth + index * weekWidth;
+    if (!compact) {
       const y = tableTop + headerRowHeight * 2;
-      lines.push(`<rect x="${x}" y="${y}" width="${weekWidth}" height="${headerRowHeight}" fill="#fafafa" stroke="#555" stroke-width="1"/>`);
-      lines.push(`<text x="${x + weekWidth / 2}" y="${y + headerRowHeight / 2 + 1}" ${textBase} font-size="12.5" text-anchor="middle" dominant-baseline="middle">${escapeXml(formatWeekLabel(week, false))}</text>`);
-    });
+      const labels = [];
+      let nextLabelLeft = leftWidth + 3;
+      weeks.forEach((week, index) => {
+        const x = leftWidth + index * weekWidth;
+        const center = x + weekWidth / 2;
+        const label = formatWeekLabel(week, false);
+        const halfLabelWidth = measureTextWidth(label, 12.5) / 2;
+        lines.push(`<rect x="${x}" y="${y}" width="${weekWidth}" height="${headerRowHeight}" fill="#fafafa" stroke="#555" stroke-width="${weekStrokeWidth}"><title>${escapeXml(formatWeekLabel(week))}</title></rect>`);
+        if (center - halfLabelWidth < nextLabelLeft || center + halfLabelWidth > width - 3) return;
+        labels.push(`<text class="week-date-label" x="${center}" y="${y + headerRowHeight / 2 + 1}" ${textBase} font-size="12.5" text-anchor="middle" dominant-baseline="middle" paint-order="stroke" stroke="#fafafa" stroke-width="3" pointer-events="none">${escapeXml(label)}</text>`);
+        nextLabelLeft = center + halfLabelWidth + 6;
+      });
+      lines.push(...labels);
+    }
 
     // 大区分セル
     catSpans.forEach((span, spanIndex) => {
@@ -874,7 +881,7 @@
       const h = span.count * taskRowHeight;
       const fill = spanIndex % 2 === 0 ? '#fbfbfb' : '#f7f7f7';
       lines.push(`<rect x="0" y="${y}" width="${categoryWidth}" height="${h}" fill="${fill}" stroke="#555" stroke-width="1"/>`);
-      const label = compact ? fitText(span.key, categoryWidth - 16, 15, 600) : span.key;
+      const label = fitText(span.key, categoryWidth - 16, 15, 600);
       lines.push(`<text x="8" y="${y + 16}" ${textBase} font-size="15" font-weight="600" dominant-baseline="hanging">${escapeXml(label)}</text>`);
     });
 
@@ -882,15 +889,15 @@
       const y = taskTop + taskIndex * taskRowHeight;
       lines.push(`<rect x="${categoryWidth}" y="${y}" width="${taskWidth}" height="${taskRowHeight}" fill="#ffffff" stroke="#555" stroke-width="1"/>`);
       const name = task.name || '名称未設定';
-      const label = compact ? fitText(name, taskWidth - 16, 14) : name;
+      const label = fitText(name, taskWidth - 16, 14);
       lines.push(`<text x="${categoryWidth + 8}" y="${y + taskRowHeight / 2 + 1}" ${textBase} font-size="14" dominant-baseline="middle">${escapeXml(label)}</text>`);
       if (compact) {
         lines.push(`<rect x="${leftWidth}" y="${y}" width="${width - leftWidth}" height="${taskRowHeight}" fill="#ffffff" stroke="#777" stroke-width="0.8"/>`);
       }
 
       const selected = new Set(task.weeks);
-      const inset = compact ? 0 : 2;
-      const hitboxStyle = compact ? 'fill="transparent"' : 'fill="#ffffff" stroke="#777" stroke-width="0.8"';
+      const inset = compact ? 0 : Math.min(2, weekWidth * 0.2);
+      const hitboxStyle = compact ? 'fill="transparent"' : `fill="#ffffff" stroke="#777" stroke-width="${weekStrokeWidth}"`;
       weeks.forEach((week, weekIndex) => {
         const x = leftWidth + weekIndex * weekWidth;
         lines.push(`<g class="timeline-week-cell" data-task-id="${escapeXml(task.id)}" data-week="${week}" tabindex="0" role="button" aria-label="${escapeXml(task.name)} ${escapeXml(formatWeekLabel(week, true))} の選択を切り替える">`);
@@ -944,11 +951,10 @@
       const scroll = card.querySelector('.timeline-scroll');
       const mount = card.querySelector('.timeline-mount');
       const toggle = card.querySelector('.week-row-toggle input');
-      const widthControls = card.querySelector('.week-width-controls');
       const widthSlider = card.querySelector('.week-width-slider');
       const widthValue = card.querySelector('.week-width-value');
       const fitButton = card.querySelector('.fit-week-width');
-      const preview = { card, heading, scroll, mount, toggle, timeline, widthControls, widthSlider, widthValue };
+      const preview = { card, heading, scroll, mount, toggle, timeline, widthSlider, widthValue };
       heading.id = `timeline-heading-${index + 1}`;
       scroll.setAttribute('aria-labelledby', heading.id);
       toggle.setAttribute('aria-label', `線表${index + 1}の週行`);
@@ -977,20 +983,17 @@
     renderTimeline();
   }
 
-  function renderTimeline(compactOnly = false) {
-    previewCards.forEach((preview, index) => {
-      if (!compactOnly || !preview.timeline.showWeekRow) renderTimelineCard(preview, index);
-    });
+  function renderTimeline() {
+    previewCards.forEach(renderTimelineCard);
   }
 
   function renderTimelineCard(preview, index) {
-    const { heading, scroll, mount, toggle, timeline, widthControls, widthSlider, widthValue } = preview;
+    const { heading, scroll, mount, toggle, timeline, widthSlider, widthValue } = preview;
     heading.textContent = `線表${index + 1}`;
     toggle.checked = timeline.showWeekRow;
-    widthControls.hidden = timeline.showWeekRow;
     const { markup, weekWidth } = getSvgMarkup(timeline, scroll.clientWidth);
     mount.innerHTML = markup || '<div class="empty-state">表示期間を確認してください．</div>';
-    if (timeline.showWeekRow || !weekWidth) return;
+    if (!weekWidth) return;
     const px = Math.round(weekWidth * 10) / 10;
     widthSlider.value = px;
     const label = timeline.weekCellWidth === null ? `自動（${px} px）` : `${px} px`;
@@ -1362,6 +1365,6 @@
     const width = els.timelinePreviews.clientWidth;
     if (previewWidth === width) return;
     previewWidth = width;
-    renderTimeline(true);
+    renderTimeline();
   }).observe(els.timelinePreviews);
 })();

@@ -232,7 +232,7 @@ p {
   accent-color: #276c39;
 }
 
-.week-width-controls:not([hidden]),
+.week-width-controls,
 .week-width-field {
   display: flex;
   flex-wrap: wrap;
