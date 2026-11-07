@@ -424,6 +424,33 @@ tbody tr:nth-child(even) {
   text-align: center;
 }
 
+.task-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0 0 0.65rem;
+  padding: 0.3rem 0.7rem 0.55rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.task-status-filters legend {
+  padding: 0 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.task-status-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+.task-status-filters input {
+  accent-color: #276c39;
+}
+
 .task-status-checkbox {
   width: 1.3rem;
   height: 1.3rem;

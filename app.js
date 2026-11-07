@@ -26,6 +26,7 @@
     addTaskButton: document.getElementById('addTaskButton'),
     addDeadlineButton: document.getElementById('addDeadlineButton'),
     taskEditorScroll: document.getElementById('taskEditorScroll'),
+    taskStatusFilters: document.getElementById('taskStatusFilters'),
     taskEditorBody: document.getElementById('taskEditorBody'),
     deadlineEditorBody: document.getElementById('deadlineEditorBody'),
     timelinePreviews: document.getElementById('timelinePreviews'),
@@ -355,18 +356,23 @@
   function renderTaskEditor() {
     const weekOptions = buildWeekOptionList();
     const fragment = document.createDocumentFragment();
+    const visibleStatuses = new Set(Array.from(els.taskStatusFilters.querySelectorAll('input:checked'), (input) => input.value));
+    const visibleIndices = state.tasks.flatMap((task, index) => visibleStatuses.has(task.status) ? [index] : []);
 
-    if (!state.tasks.length) {
+    if (!visibleIndices.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
       cell.colSpan = 9;
-      cell.textContent = 'タスクがありません．「＋ タスク追加」から追加してください．';
+      cell.textContent = state.tasks.length
+        ? '選択した進捗に該当するタスクがありません．'
+        : 'タスクがありません．「＋ タスク追加」から追加してください．';
       cell.className = 'empty-state';
       row.appendChild(cell);
       fragment.appendChild(row);
     }
 
-    state.tasks.forEach((task, index) => {
+    visibleIndices.forEach((index, visibleIndex) => {
+      const task = state.tasks[index];
       const row = document.createElement('tr');
       row.dataset.taskId = task.id;
       const bounds = selectedBounds(task);
@@ -390,6 +396,10 @@
         task.status = TASK_STATUSES[statusIndex].value;
         updateStatusCheckbox();
         saveLocal();
+        if (!visibleStatuses.has(task.status)) {
+          renderTaskEditor();
+          els.taskStatusFilters.querySelector('input:checked')?.focus({ preventScroll: true });
+        }
       });
       statusCell.appendChild(statusCheckbox);
 
@@ -477,7 +487,7 @@
       handle.textContent = '⠿';
       handle.title = 'ドラッグして並べ替え';
       handle.setAttribute('aria-label', `${task.name} をドラッグして並べ替え`);
-      handle.addEventListener('pointerdown', (event) => startTaskDrag(event, row, index));
+      handle.addEventListener('pointerdown', (event) => startTaskDrag(event, row, visibleIndex, visibleIndices));
       orderCell.appendChild(handle);
 
       const deleteCell = document.createElement('td');
@@ -502,16 +512,18 @@
     els.taskEditorBody.replaceChildren(fragment);
   }
 
-  function moveTask(from, to) {
+  function moveTask(from, to, visibleIndices) {
     if (from === to) return;
-    const [item] = state.tasks.splice(from, 1);
-    state.tasks.splice(to, 0, item);
+    const tasks = visibleIndices.map((index) => state.tasks[index]);
+    const [item] = tasks.splice(from, 1);
+    tasks.splice(to, 0, item);
+    visibleIndices.forEach((index, position) => { state.tasks[index] = tasks[position]; });
     renderTaskEditor();
     persistAndRenderTimeline();
   }
 
-  function startTaskDrag(event, sourceRow, from) {
-    if (!event.isPrimary || event.button !== 0 || state.tasks.length < 2) return;
+  function startTaskDrag(event, sourceRow, from, visibleIndices) {
+    if (!event.isPrimary || event.button !== 0 || visibleIndices.length < 2) return;
     event.preventDefault();
     const handle = event.currentTarget;
     const pointerId = event.pointerId;
@@ -569,7 +581,7 @@
       if (frame !== undefined) window.cancelAnimationFrame(frame);
       marker?.classList.remove('drop-before', 'drop-after');
       sourceRow.classList.remove('task-dragging');
-      if (dropped) moveTask(from, targetIndex);
+      if (dropped && sourceRow.isConnected) moveTask(from, targetIndex, visibleIndices);
     }
 
     handle.setPointerCapture(pointerId);
@@ -1282,6 +1294,7 @@
       color: DEFAULT_COLOR,
       status: TASK_STATUSES[0].value
     });
+    els.taskStatusFilters.querySelector(`input[value="${TASK_STATUSES[0].value}"]`).checked = true;
     renderTaskEditor();
     persistAndRenderTimeline();
   }
@@ -1300,6 +1313,7 @@
   }
 
   els.addTaskButton.addEventListener('click', addTask);
+  els.taskStatusFilters.addEventListener('change', renderTaskEditor);
   els.addDeadlineButton.addEventListener('click', addDeadline);
   els.downloadCsvButton.addEventListener('click', () => downloadCsv());
   els.showAllWeeks.addEventListener('click', () => setAllWeekRows(true));

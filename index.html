@@ -77,6 +77,12 @@
         <button id="addTaskButton" type="button">＋ タスク追加</button>
       </div>
 
+      <fieldset id="taskStatusFilters" class="task-status-filters">
+        <legend>表示する進捗</legend>
+        <label><input type="checkbox" value="not_started" checked>未着手</label>
+        <label><input type="checkbox" value="running" checked>実行中</label>
+        <label><input type="checkbox" value="completed" checked>完了</label>
+      </fieldset>
       <div id="taskEditorScroll" class="table-container editor-table-container">
         <table class="editor-table task-table" aria-label="タスク編集表">
           <thead>
