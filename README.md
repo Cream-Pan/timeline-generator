@@ -39,6 +39,7 @@
 - [保存データ](#保存データ)
 - [PNG・SVG出力](#pngsvg出力)
 - [データフロー](#データフロー)
+- [Web API](#web-api)
 - [使用方法](#使用方法)
 - [注意点](#注意点)
 
@@ -74,16 +75,25 @@
 ├── index.html
 ├── style.css
 ├── app.js
-└── README.md
+├── README.md
+├── vercel.json
+├── package.json
+├── lib/
+│   └── timeline-core.js
+└── api/
+    └── timeline.js
 ```
 
 各ファイルの役割は以下である．
 
 | ファイル | 内容 |
 |---|---|
-| `index.html` | 画面構成，入力フォーム，タスク編集表，線表プレビュー領域 |
-| `style.css` | WebApp 全体のデザイン，編集表，レスポンシブ表示 |
-| `app.js` | 状態管理，週計算，CSV 入出力，SVG 描画，PNG / SVG 保存，`localStorage` 保存 |
+| `index.html` | 画面構成，入力フォーム，タスク編集表，線表プレビュー領域，APIリンク取得ダイアログ |
+| `style.css` | WebApp 全体のデザイン，編集表，レスポンシブ表示，ダイアログスタイル |
+| `app.js` | 画面のイベントハンドラ，状態同期，APIリンク生成 |
+| `lib/timeline-core.js` | 日付・週計算，データサニタイズ，SVG生成コアロジック（ブラウザ・Node.js両対応） |
+| `api/timeline.js` | Vercel Serverless Function（SVG / JSON 画像生成API） |
+| `vercel.json` | Vercel ルーティングおよび CORS ヘッダー設定 |
 | `README.md` | 本ドキュメント |
 
 「サンプルCSV保存」を押すと，内蔵のサンプルから `sample_schedule.csv` を生成する．
@@ -563,6 +573,50 @@ flowchart LR
     B3 --> B8
     B7 --> B9
     B7 --> B10
+```
+
+<p align="right">(<a href="#top">トップへ戻る</a>)</p>
+
+---
+
+## Web API
+
+本アプリは Vercel Serverless Functions を用いた軽量な画像生成 API を内蔵している．サーバー側にデータを一切保存しない完全ステートレス設計のため，プライバシーを安全に保ちながら利用できる．
+
+### 1．線表生成 API (`/api/timeline`)
+
+- **エンドポイント**: `GET /api/timeline` / `POST /api/timeline`
+- **出力フォーマット**: SVG（既定）または JSON
+
+#### クエリパラメータ (GET)
+
+| パラメータ | 必須 | 説明 | 例 |
+|---|:---:|---|---|
+| `title` | 任意 | 線表タイトル | `title=研究進捗` |
+| `start` | 任意 | 表示開始週 (YYYY-MM-DD) | `start=2026-10-04` |
+| `end` | 任意 | 表示終了週 (YYYY-MM-DD) | `end=2026-12-27` |
+| `format` | 任意 | 出力形式 (`svg` または `json`) | `format=svg` |
+| `tasks` | 任意 | タスク一覧（JSON配列または簡易文字列） | `tasks=実験:2026-10-11,2026-10-18:#4f7ec7` |
+
+#### POST リクエスト (Python / スクリプト用)
+
+線表の完全な状態（タスク・締切・表示期間）を JSON で送信して SVG を直接取得できる．
+
+```python
+import requests
+
+url = "https://<your-vercel-domain>/api/timeline"
+payload = {
+    "timelines": [{ "title": "卒業研究線表", "displayStartWeek": "2026-10-04", "displayEndWeek": "2026-12-27" }],
+    "tasks": [
+        { "name": "センサ実装", "category": "開発", "weeks": ["2026-10-11", "2026-10-18"], "color": "#4f7ec7" },
+        { "name": "データ解析", "category": "解析", "weeks": ["2026-11-01", "2026-11-08"], "color": "#50E3C2" }
+    ]
+}
+
+response = requests.post(url, json=payload)
+with open("timeline.svg", "wb") as f:
+    f.write(response.content)
 ```
 
 <p align="right">(<a href="#top">トップへ戻る</a>)</p>

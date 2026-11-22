@@ -1,0 +1,12 @@
+{
+  "name": "timeline-generator",
+  "version": "1.0.0",
+  "description": "週単位のタスク期間を可視化する進捗線表 Generator & 画像生成API",
+  "main": "api/timeline.js",
+  "scripts": {
+    "test": "node tests/test_core.js"
+  },
+  "keywords": ["timeline", "gantt", "svg", "api", "slack"],
+  "author": "Takato Ishii",
+  "license": "MIT"
+}

@@ -32,7 +32,14 @@
     timelinePreviews: document.getElementById('timelinePreviews'),
     timelinePreviewTemplate: document.getElementById('timelinePreviewTemplate'),
     showAllWeeks: document.getElementById('showAllWeeks'),
-    hideAllWeeks: document.getElementById('hideAllWeeks')
+    hideAllWeeks: document.getElementById('hideAllWeeks'),
+    shareApiButton: document.getElementById('shareApiButton'),
+    shareDialog: document.getElementById('shareDialog'),
+    apiSvgUrlInput: document.getElementById('apiSvgUrlInput'),
+    markdownTagInput: document.getElementById('markdownTagInput'),
+    copySvgUrlButton: document.getElementById('copySvgUrlButton'),
+    copyMarkdownButton: document.getElementById('copyMarkdownButton'),
+    closeShareDialogButton: document.getElementById('closeShareDialogButton')
   };
 
   function makeId(prefix) {
@@ -1371,6 +1378,82 @@
     const replacement = mount.querySelector(`[data-task-id="${CSS.escape(taskId)}"][data-week="${week}"]`);
     (replacement || mount.parentElement).focus({ preventScroll: true });
   });
+
+  function openShareDialog() {
+    if (!els.shareDialog) return;
+    const origin = window.location.origin;
+    const timeline = state.timelines[0] || {};
+    const title = timeline.title || DEFAULT_TITLE;
+
+    const params = new URLSearchParams();
+    params.set('title', title);
+    if (timeline.displayStartWeek) params.set('start', timeline.displayStartWeek);
+    if (timeline.displayEndWeek) params.set('end', timeline.displayEndWeek);
+    params.set('format', 'svg');
+
+    if (state.tasks && state.tasks.length > 0) {
+      const taskTokens = state.tasks.map((t) => {
+        const cat = t.category ? `${t.category}/` : '';
+        const weeks = (t.weeks || []).join(',');
+        return `${cat}${t.name}:${weeks}:${t.color || ''}`;
+      });
+      params.set('tasks', taskTokens.join(';'));
+    }
+
+    const svgUrl = `${origin}/api/timeline?${params.toString()}`;
+    const markdown = `![${title}](${svgUrl})`;
+
+    if (els.apiSvgUrlInput) els.apiSvgUrlInput.value = svgUrl;
+    if (els.markdownTagInput) els.markdownTagInput.value = markdown;
+
+    if (typeof els.shareDialog.showModal === 'function') {
+      els.shareDialog.showModal();
+    } else {
+      els.shareDialog.setAttribute('open', '');
+    }
+  }
+
+  async function copyToClipboard(inputElement, successMessage) {
+    if (!inputElement || !inputElement.value) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(inputElement.value);
+      } else {
+        inputElement.select();
+        document.execCommand('copy');
+      }
+      showMessage(successMessage || 'クリップボードにコピーしました！');
+    } catch (e) {
+      inputElement.select();
+      showMessage('手動で選択してコピーしてください．', 'warning');
+    }
+  }
+
+  if (els.shareApiButton) {
+    els.shareApiButton.addEventListener('click', openShareDialog);
+  }
+
+  if (els.closeShareDialogButton && els.shareDialog) {
+    els.closeShareDialogButton.addEventListener('click', () => {
+      if (typeof els.shareDialog.close === 'function') {
+        els.shareDialog.close();
+      } else {
+        els.shareDialog.removeAttribute('open');
+      }
+    });
+  }
+
+  if (els.copySvgUrlButton && els.apiSvgUrlInput) {
+    els.copySvgUrlButton.addEventListener('click', () => {
+      copyToClipboard(els.apiSvgUrlInput, '画像URLをコピーしました！');
+    });
+  }
+
+  if (els.copyMarkdownButton && els.markdownTagInput) {
+    els.copyMarkdownButton.addEventListener('click', () => {
+      copyToClipboard(els.markdownTagInput, 'Markdown埋め込みタグをコピーしました！');
+    });
+  }
 
   renderAll();
   saveLocal();
