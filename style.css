@@ -640,3 +640,56 @@ tbody tr:nth-child(even) {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+/* 共有ダイアログ */
+.share-dialog {
+  border: 1px solid #c7d8cc;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 580px;
+  width: 90vw;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.16);
+  background: #ffffff;
+}
+
+.share-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(2px);
+}
+
+.share-dialog-content {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.share-dialog-title {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #27402f;
+}
+
+.input-with-copy {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.input-with-copy input {
+  flex: 1;
+  background: #f8faf8;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 0.85rem;
+}
+
+.copy-button {
+  white-space: nowrap;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.88rem;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+

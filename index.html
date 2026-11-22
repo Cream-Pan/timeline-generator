@@ -33,6 +33,7 @@
           <button id="newProjectButton" type="button" class="secondary-button">新規作成</button>
           <button id="downloadCsvButton" type="button">CSV保存</button>
           <button id="downloadSampleButton" type="button" class="secondary-button">サンプルCSV保存</button>
+          <button id="shareApiButton" type="button" class="secondary-button">API・画像URL取得</button>
         </div>
       </div>
       <p class="tiny-muted">入力内容は同じブラウザの localStorage に自動保存します．正式なバックアップにはCSV保存を利用してください．</p>
@@ -167,8 +168,37 @@
         </article>
       </template>
     </section>
+
+    <!-- API・画像リンク取得ダイアログ -->
+    <dialog id="shareDialog" class="share-dialog">
+      <div class="share-dialog-content">
+        <h3 class="share-dialog-title">API・画像URL取得</h3>
+        <p class="tiny-muted">この線表の画像URLを取得して，ブラウザ直接表示やMarkdown・外部スクリプトで利用できます．</p>
+
+        <label class="field">
+          <span>画像URL（SVG形式・ブラウザで直接表示）</span>
+          <div class="input-with-copy">
+            <input id="apiSvgUrlInput" type="text" readonly>
+            <button id="copySvgUrlButton" type="button" class="copy-button">コピー</button>
+          </div>
+        </label>
+
+        <label class="field">
+          <span>Markdown 埋め込みタグ</span>
+          <div class="input-with-copy">
+            <input id="markdownTagInput" type="text" readonly>
+            <button id="copyMarkdownButton" type="button" class="copy-button">コピー</button>
+          </div>
+        </label>
+
+        <div class="dialog-actions">
+          <button type="button" id="closeShareDialogButton" class="secondary-button">閉じる</button>
+        </div>
+      </div>
+    </dialog>
   </main>
 
+  <script src="lib/timeline-core.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
